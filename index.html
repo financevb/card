@@ -273,9 +273,9 @@ h1{font-size:22px;font-weight:700;letter-spacing:-.4px;margin:0;color:var(--gray
     </div>
     <div id="stepCode" class="hidden">
       <div class="field">
-        <label for="loginCode">메일로 받은 인증 코드</label>
-        <input type="text" id="loginCode" inputmode="numeric" maxlength="8" placeholder="숫자 코드" autocomplete="one-time-code" onkeydown="if(event.key==='Enter')verifyLogin()">
-        <p class="hint">메일에 코드 대신 링크만 있으면, 링크를 누르면 바로 관리자 모드로 들어와요.</p>
+        <label for="loginCode">메일로 받은 인증 코드 또는 링크</label>
+        <input type="text" id="loginCode" placeholder="숫자 코드 또는 복사한 링크" autocomplete="one-time-code" onkeydown="if(event.key==='Enter')verifyLogin()">
+        <p class="hint">메일에 링크만 있으면 <b>누르지 말고</b>, 링크(버튼)에 마우스 오른쪽 클릭 → <b>링크 주소 복사</b> → 여기에 붙여넣으세요.</p>
       </div>
       <div class="err" id="loginErr2"></div>
       <div class="btns"><button class="lineBtn" onclick="closeLogin()">닫기</button><button class="submitBtn" onclick="verifyLogin()">확인</button></div>
@@ -416,8 +416,13 @@ async function sendLogin(){
 async function verifyLogin(){
   const token = document.getElementById('loginCode').value.replace(/\s/g,'');
   const err = document.getElementById('loginErr2');
-  if(!/^[0-9]{6,8}$/.test(token)){ err.textContent = '메일에 있는 숫자 코드를 입력해주세요.'; return; }
-  const { data, error } = await sb.auth.verifyOtp({ email: ADMIN_EMAIL, token, type:'email' });
+  // 메일 링크는 리디렉트 주소(Supabase 설정)가 localhost라 누르면 실패 → 링크를 붙여넣으면 token_hash로 직접 인증
+  let linkUrl = null;
+  try{ if(/token=/.test(token)) linkUrl = new URL(token); }catch(e){}
+  if(!linkUrl && !/^[0-9]{6,8}$/.test(token)){ err.textContent = '메일에 있는 숫자 코드나 복사한 링크를 붙여넣어 주세요.'; return; }
+  const { data, error } = linkUrl
+    ? await sb.auth.verifyOtp({ token_hash: linkUrl.searchParams.get('token'), type: linkUrl.searchParams.get('type') || 'magiclink' })
+    : await sb.auth.verifyOtp({ email: ADMIN_EMAIL, token, type:'email' });
   if(error || !isAdminSession(data && data.session)){ err.textContent = '코드가 맞지 않거나 만료됐어요. 다시 받아주세요.'; return; }
   closeLogin(); setAdmin(true); showToast('관리자 모드 시작');
 }
